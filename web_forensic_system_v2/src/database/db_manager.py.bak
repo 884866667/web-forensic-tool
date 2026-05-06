@@ -1,0 +1,177 @@
+"""
+数据库管理类
+"""
+import pymysql
+from typing import List, Dict, Any, Optional
+
+class DatabaseManager:
+    """数据库管理器"""
+    
+    def __init__(self):
+        self.connection = None
+    
+    def connect(self):
+        """连接数据库"""
+        try:
+            from config.database import DatabaseConnection
+            self.connection = DatabaseConnection.get_connection()
+            return self
+        except ImportError as e:
+            print(f"导入配置失败: {e}")
+            raise
+    
+    def close(self):
+        """关闭连接"""
+        if self.connection:
+            self.connection.close()
+            self.connection = None
+    
+    def __enter__(self):
+        self.connect()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+    
+    def create_tables(self) -> bool:
+        """创建所有数据表"""
+        try:
+            with open('data/sql/create_tables.sql', 'r', encoding='utf-8') as f:
+                sql_script = f.read()
+            
+            with self.connection.cursor() as cursor:
+                # 分割SQL语句并执行
+                sql_statements = sql_script.split(';')
+                for statement in sql_statements:
+                    statement = statement.strip()
+                    if statement:
+                        cursor.execute(statement)
+                
+                self.connection.commit()
+                print("数据表创建完成")
+                return True
+                
+        except FileNotFoundError:
+            print("错误：SQL文件不存在: data/sql/create_tables.sql")
+            return False
+        except Exception as e:
+            print(f"创建表失败: {e}")
+            if self.connection:
+                self.connection.rollback()
+            return False
+    
+    def save_web_page(self, web_page) -> Optional[int]:
+        """保存网页数据"""
+        try:
+            with self.connection.cursor() as cursor:
+                # 检查是否已存在
+                cursor.execute(
+                    "SELECT id FROM web_pages WHERE content_hash = %s", 
+                    (web_page.content_hash,)
+                )
+                existing = cursor.fetchone()
+                
+                if existing:
+                    print(f"内容已存在 (ID: {existing['id']})")
+                    return existing['id']
+                
+                # 插入网页数据
+                cursor.execute("""
+                    INSERT INTO web_pages 
+                    (url, ip_address, title, content, html_content, timestamp, content_hash)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    web_page.url,
+                    web_page.ip_address,
+                    web_page.title,
+                    web_page.content[:50000],
+                    web_page.html_content[:1000000],
+                    web_page.timestamp,
+                    web_page.content_hash
+                ))
+                
+                page_id = cursor.lastrowid
+                
+                # 保存图像
+                for image in web_page.images[:10]:
+                    try:
+                        cursor.execute("""
+                            INSERT INTO images (page_id, image_url, alt_text, image_hash)
+                            VALUES (%s, %s, %s, %s)
+                        """, (
+                            page_id,
+                            image.url,
+                            image.alt_text,
+                            image.image_hash
+                        ))
+                    except Exception as img_e:
+                        print(f"保存图像失败: {img_e}")
+                
+                self.connection.commit()
+                print(f"网页保存成功，ID: {page_id}")
+                return page_id
+                
+        except Exception as e:
+            print(f"保存网页失败: {e}")
+            self.connection.rollback()
+            return None
+    
+    def search_by_keyword(self, keyword: str) -> List[Dict[str, Any]]:
+        """根据关键字搜索网页"""
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id, url, title, timestamp, content_hash
+                    FROM web_pages 
+                    WHERE content LIKE %s OR title LIKE %s
+                    LIMIT 50
+                """, (f'%{keyword}%', f'%{keyword}%'))
+                
+                results = cursor.fetchall()
+                
+                # 记录搜索日志
+                self._log_search('keyword', keyword, len(results))
+                
+                return results
+                
+        except Exception as e:
+            print(f"搜索失败: {e}")
+            return []
+    
+    def _log_search(self, search_type: str, query: str, result_count: int):
+        """记录搜索日志"""
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO search_log (search_type, search_query, result_count)
+                    VALUES (%s, %s, %s)
+                """, (search_type, query, result_count))
+                self.connection.commit()
+        except Exception as e:
+            print(f"记录搜索日志失败: {e}")
+    
+    def get_page_count(self) -> int:
+        """获取网页总数"""
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) as count FROM web_pages")
+                result = cursor.fetchone()
+                return result['count'] if result else 0
+        except Exception as e:
+            print(f"获取网页数量失败: {e}")
+            return 0
+
+def test_database():
+    """测试数据库连接"""
+    print("测试数据库连接...")
+    try:
+        with DatabaseManager() as db:
+            count = db.get_page_count()
+            print(f"当前网页数量: {count}")
+            return True
+    except Exception as e:
+        print(f"数据库测试失败: {e}")
+        return False
+
+if __name__ == "__main__":
+    test_database()

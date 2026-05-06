@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网页取证系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="glass-card">
+            <h1><i class="fas fa-shield-alt"></i> 网页取证系统</h1>
+            <p class="subtitle">专业网页数据采集与分析平台</p>
+        </header>
+
+        <!-- 数据库状态 -->
+        <div class="stats-card">
+            <div class="stats-info">
+                <h3><i class="fas fa-database"></i> 数据库状态</h3>
+                <div class="stats-count" id="pageCount">--</div>
+            </div>
+            <button onclick="getDBStats()" class="btn-small">
+                <i class="fas fa-sync-alt"></i> 刷新
+            </button>
+        </div>
+
+        <!-- 功能网格 -->
+        <div class="function-grid">
+            <!-- 系统管理 -->
+            <div class="function-card">
+                <h3><i class="fas fa-cogs"></i> 系统管理</h3>
+                <div class="function-buttons">
+                    <button onclick="initDatabase()" class="btn btn-primary">
+                        <i class="fas fa-database"></i> 初始化数据库
+                    </button>
+                    <button onclick="getSystemStatus()" class="btn btn-info">
+                        <i class="fas fa-chart-bar"></i> 系统状态
+                    </button>
+                    <button onclick="testSystem()" class="btn btn-success">
+                        <i class="fas fa-vial"></i> 系统测试
+                    </button>
+                </div>
+            </div>
+
+            <!-- 网页爬取 -->
+            <div class="function-card">
+                <h3><i class="fas fa-spider"></i> 网页爬取</h3>
+
+                <!-- 标签页切换 -->
+                <div class="tab-buttons">
+                    <button class="tab-btn active" onclick="showTab('single-tab')">
+                        <i class="fas fa-file-alt"></i> 单个爬取
+                    </button>
+                    <button class="tab-btn" onclick="showTab('batch-tab')">
+                        <i class="fas fa-layer-group"></i> 批量爬取
+                    </button>
+                </div>
+
+                <!-- 单个爬取标签页 -->
+                <div id="single-tab" class="tab-content active">
+                    <div class="input-group">
+                        <i class="fas fa-link"></i>
+                        <input type="text" id="crawlUrl"
+                               placeholder="输入要爬取的网页URL"
+                               value="https://www.baidu.com">
+                    </div>
+                    <button onclick="crawlPage()" class="btn btn-success">
+                        <i class="fas fa-cloud-download-alt"></i> 开始爬取
+                    </button>
+                </div>
+
+                <!-- 批量爬取标签页 -->
+                <div id="batch-tab" class="tab-content">
+                    <div class="input-group">
+                        <i class="fas fa-list"></i>
+                        <textarea id="batchUrls" rows="6"
+                                  placeholder="输入多个URL，每行一个（支持导入.txt文件）：
+https://www.baidu.com
+https://www.qq.com
+https://www.sina.com.cn
+https://www.sohu.com"></textarea>
+                    </div>
+                    <div class="batch-controls">
+                        <button onclick="batchCrawl()" class="btn btn-warning">
+                            <i class="fas fa-play"></i> 开始批量爬取
+                        </button>
+                        <button onclick="importExampleUrls()" class="btn-small">
+                            <i class="fas fa-magic"></i> 填充示例
+                        </button>
+                        <button onclick="clearBatchUrls()" class="btn-small">
+                            <i class="fas fa-trash"></i> 清空列表
+                        </button>
+                    </div>
+                    <div class="file-upload">
+                        <input type="file" id="urlFile" accept=".txt" style="display: none;">
+                        <button onclick="document.getElementById('urlFile').click()" class="btn-small">
+                            <i class="fas fa-file-import"></i> 从TXT文件导入
+                        </button>
+                        <small style="display: block; margin-top: 8px; color: var(--gray);">
+                            支持.txt文件，每行一个URL
+                        </small>
+                    </div>
+                </div>
+
+                <!-- 定时任务（两个标签页都显示） -->
+                <div style="margin-top: 28px; border-top: 1px solid var(--border); padding-top: 20px;">
+                    <div class="input-group">
+                        <i class="fas fa-clock"></i>
+                        <input type="number" id="scheduleInterval"
+                               value="24" min="1" max="168"
+                               placeholder="定时任务间隔时间（小时）">
+                    </div>
+                    <button onclick="startSchedule()" class="btn btn-info">
+                        <i class="fas fa-tasks"></i> 启动定时爬取任务
+                    </button>
+                    <small style="display: block; margin-top: 8px; color: var(--gray);">
+                        定时任务会在后台运行，按指定间隔自动爬取预设网站
+                    </small>
+                </div>
+            </div>
+
+            <!-- 搜索功能 -->
+            <div class="function-card">
+                <h3><i class="fas fa-search"></i> 搜索功能</h3>
+                <div class="input-group">
+                    <i class="fas fa-keyboard"></i>
+                    <input type="text" id="searchKeyword"
+                           placeholder="输入文本关键词"
+                           value="百度">
+                </div>
+                <button onclick="searchText()" class="btn btn-primary">
+                    <i class="fas fa-search"></i> 执行文本搜索
+                </button>
+
+                <div style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 20px;">
+                    <div class="input-group">
+                        <i class="fas fa-image"></i>
+                        <input type="text" id="imageHash"
+                               placeholder="输入图像哈希值"
+                               value="示例哈希">
+                    </div>
+                    <button onclick="searchImage()" class="btn btn-info">
+                        <i class="fas fa-image"></i> 执行图像搜索
+                    </button>
+                    <small style="display: block; margin-top: 8px; color: var(--gray);">
+                        基于图像哈希值进行匹配搜索
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- 执行结果 -->
+        <div class="result-section glass-card">
+            <div class="result-header">
+                <h3>
+                    <span class="status-indicator idle" id="statusIndicator"></span>
+                    <i class="fas fa-terminal"></i> 执行结果
+                </h3>
+                <div class="result-controls">
+                    <button onclick="clearResults()" class="btn-small">
+                        <i class="fas fa-trash"></i> 清空
+                    </button>
+                    <button onclick="toggleAutoScroll()" class="btn-small" id="autoScrollBtn">
+                        <i class="fas fa-arrow-down"></i> 自动滚动
+                    </button>
+                    <button onclick="copyResults()" class="btn-small">
+                        <i class="fas fa-copy"></i> 复制
+                    </button>
+                </div>
+            </div>
+            <pre id="resultOutput" class="result-output">系统就绪，请选择操作...</pre>
+        </div>
+
+        <!-- 页脚 -->
+        <footer>
+            <p>网页综合取证系统 V2 &copy; 2024 - 专业数据采集平台</p>
+            <p style="font-size: 0.85rem; margin-top: 8px; opacity: 0.8;">
+                支持单个/批量网页爬取、定时任务、全文搜索、图像搜索
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        let autoScroll = true;
+        let statusIndicator = document.getElementById('statusIndicator');
+        let batchProcessing = false;
+
+        // 设置初始状态
+        updateStatus('idle');
+
+        // 标签页功能
+        function showTab(tabId) {
+            // 隐藏所有标签内容
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // 移除所有标签按钮的active类
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // 显示选中的标签
+            document.getElementById(tabId).classList.add('active');
+
+            // 激活对应的按钮
+            event.currentTarget.classList.add('active');
+        }
+
+        function updateStatus(status) {
+            statusIndicator.className = 'status-indicator ' + status;
+        }
+
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            const btn = document.getElementById('autoScrollBtn');
+            if (autoScroll) {
+                btn.innerHTML = '<i class="fas fa-arrow-down"></i> 自动滚动';
+                btn.style.background = 'rgba(76, 201, 240, 0.2)';
+            } else {
+                btn.innerHTML = '<i class="fas fa-ban"></i> 停止滚动';
+                btn.style.background = 'rgba(239, 68, 68, 0.2)';
+            }
+        }
+
+        function scrollToBottom() {
+            if (autoScroll) {
+                const output = document.getElementById('resultOutput');
+                output.scrollTop = output.scrollHeight;
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('resultOutput').textContent = '结果已清空\n' + new Date().toLocaleString();
+            updateStatus('idle');
+        }
+
+        function copyResults() {
+            const output = document.getElementById('resultOutput');
+            navigator.clipboard.writeText(output.textContent).then(() => {
+                // 显示临时提示
+                const btn = event.currentTarget;
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                btn.style.background = 'rgba(16, 185, 129, 0.3)';
+
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.style.background = 'rgba(255, 255, 255, 0.1)';
+                }, 2000);
+            });
+        }
+
+        function getDBStats() {
+            const countEl = document.getElementById('pageCount');
+            const originalContent = countEl.textContent;
+            countEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch('/api/get_db_stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        countEl.textContent = data.page_count || 0;
+                        countEl.style.color = '#ffffff';
+                    } else {
+                        countEl.textContent = '错误';
+                        countEl.style.color = '#fbbf24';
+                    }
+                })
+                .catch(() => {
+                    countEl.textContent = '--';
+                    countEl.style.color = '#ef4444';
+                });
+        }
+
+        async function callAPI(endpoint, data = {}, method = 'POST') {
+            updateStatus('running');
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: method !== 'GET' ? JSON.stringify(data) : undefined
+                });
+
+                const result = await response.json();
+                const output = document.getElementById('resultOutput');
+                const timestamp = new Date().toLocaleString();
+
+                // 添加分隔线和时间戳
+                output.textContent += `\n\n${'═'.repeat(60)}\n📅 ${timestamp}\n${'═'.repeat(60)}\n\n`;
+
+                // 显示结果
+                if (result.output !== undefined) {
+                    output.textContent += result.output;
+                } else if (result.message !== undefined) {
+                    output.textContent += result.message;
+                } else {
+                    output.textContent += JSON.stringify(result, null, 2);
+                }
+
+                // 添加分隔线
+                output.textContent += `\n\n${'─'.repeat(60)}\n`;
+
+                // 滚动到底部
+                scrollToBottom();
+
+                // 恢复状态
+                setTimeout(() => updateStatus('idle'), 500);
+
+                // 如果是数据库相关操作，刷新统计
+                if (endpoint.includes('/api/') &&
+                    !endpoint.includes('/get_db_stats') &&
+                    !endpoint.includes('/debug_info')) {
+                    setTimeout(getDBStats, 1000);
+                }
+
+                return result;
+
+            } catch (error) {
+                const output = document.getElementById('resultOutput');
+                output.textContent += `\n\n${'═'.repeat(60)}\n❌ 错误\n${'═'.repeat(60)}\n\n`;
+                output.textContent += `错误: ${error.message}`;
+                updateStatus('idle');
+                return { success: false };
+            }
+        }
+
+        function initDatabase() {
+            if (confirm('确定要初始化数据库吗？这不会删除已有数据。')) {
+                callAPI('/api/init_db');
+            }
+        }
+
+        function getSystemStatus() {
+            callAPI('/api/status');
+        }
+
+        function testSystem() {
+            callAPI('/api/full_test');
+        }
+
+        function crawlPage() {
+            const url = document.getElementById('crawlUrl').value;
+            if (!url) {
+                alert('请输入URL地址');
+                return;
+            }
+            if (!url.startsWith('http')) {
+                alert('URL必须以 http:// 或 https:// 开头');
+                return;
+            }
+            callAPI('/api/crawl', { url: url });
+        }
+
+        function batchCrawl() {
+            if (batchProcessing) {
+                alert('批量爬取正在进行中，请稍候...');
+                return;
+            }
+
+            const urlsText = document.getElementById('batchUrls').value;
+            if (!urlsText.trim()) {
+                alert('请输入要爬取的URL列表');
+                return;
+            }
+
+            const urls = urlsText.split('\n').filter(url => url.trim());
+            if (urls.length === 0) {
+                alert('没有找到有效的URL');
+                return;
+            }
+
+            // 验证URL格式
+            const invalidUrls = urls.filter(url => !url.startsWith('http'));
+            if (invalidUrls.length > 0) {
+                if (!confirm(`发现 ${invalidUrls.length} 个无效URL（缺少http://或https://），是否继续？\n\n无效URL示例：${invalidUrls.slice(0, 3).join(', ')}`)) {
+                    return;
+                }
+            }
+
+            if (urls.length > 50) {
+                if (!confirm(`检测到 ${urls.length} 个URL，批量爬取可能需要较长时间，确定要继续吗？`)) {
+                    return;
+                }
+            }
+
+            batchProcessing = true;
+
+            // 显示开始消息
+            const output = document.getElementById('resultOutput');
+            output.textContent += `\n\n${'⭐'.repeat(60)}\n🚀 开始批量爬取 ${urls.length} 个URL\n${'⭐'.repeat(60)}\n\n`;
+            scrollToBottom();
+
+            callAPI('/api/batch_crawl', { urls: urlsText })
+                .then(result => {
+                    // 显示统计信息
+                    if (result.stats) {
+                        output.textContent += `\n\n${'📊'.repeat(30)}\n📈 批量爬取统计\n${'📊'.repeat(30)}\n`;
+                        output.textContent += `总计: ${result.stats.total} 个URL\n`;
+                        output.textContent += `成功: ${result.stats.success} 个\n`;
+                        output.textContent += `失败: ${result.stats.fail} 个\n`;
+                        output.textContent += `成功率: ${(result.stats.success / result.stats.total * 100).toFixed(1)}%\n`;
+                    }
+                })
+                .finally(() => {
+                    batchProcessing = false;
+                });
+        }
+
+        function importExampleUrls() {
+            const exampleUrls = `https://www.baidu.com
+https://www.qq.com
+https://www.sina.com.cn`;
+
+            document.getElementById('batchUrls').value = exampleUrls;
+
+            // 显示提示
+            const output = document.getElementById('resultOutput');
+            output.textContent += `\n✅ 已填充示例URL（3个常用网站）\n`;
+            scrollToBottom();
+        }
+
+        function clearBatchUrls() {
+            document.getElementById('batchUrls').value = '';
+
+            // 显示提示
+            const output = document.getElementById('resultOutput');
+            output.textContent += `\n🗑️  已清空批量URL列表\n`;
+            scrollToBottom();
+        }
+
+        // 文件上传处理
+        document.getElementById('urlFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.name.endsWith('.txt')) {
+                alert('只支持.txt文件');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const content = event.target.result;
+                const urls = content.split('\n').filter(url => url.trim()).length;
+                document.getElementById('batchUrls').value = content;
+
+                // 显示成功消息
+                const output = document.getElementById('resultOutput');
+                output.textContent += `\n📁 从文件 "${file.name}" 成功导入 ${urls} 个URL\n`;
+                scrollToBottom();
+            };
+            reader.readAsText(file);
+
+            // 清空文件输入，允许重复选择相同文件
+            e.target.value = '';
+        });
+
+        function startSchedule() {
+            const interval = document.getElementById('scheduleInterval').value;
+            if (confirm(`确定要启动定时任务吗？将每 ${interval} 小时执行一次爬取。`)) {
+                callAPI('/api/schedule', { interval: interval });
+            }
+        }
+
+        function searchText() {
+            const keyword = document.getElementById('searchKeyword').value;
+            if (!keyword) {
+                alert('请输入搜索关键词');
+                return;
+            }
+            callAPI('/api/search_text', { keyword: keyword });
+        }
+
+        function searchImage() {
+            const imageHash = document.getElementById('imageHash').value;
+            if (!imageHash) {
+                alert('请输入图像哈希值');
+                return;
+            }
+            callAPI('/api/search_image', { image_hash: imageHash });
+        }
+
+        // 页面加载时只获取一次数据库状态
+        document.addEventListener('DOMContentLoaded', () => {
+            getDBStats();
+            updateStatus('idle');
+
+            // 添加一些初始提示
+            const output = document.getElementById('resultOutput');
+            output.textContent = `✨ 网页取证系统已就绪\n${'─'.repeat(50)}\n`;
+            output.textContent += `📅 ${new Date().toLocaleString()}\n`;
+            output.textContent += `🌐 系统功能：\n`;
+            output.textContent += `  • 单个网页爬取\n`;
+            output.textContent += `  • 批量网页爬取\n`;
+            output.textContent += `  • 定时爬取任务\n`;
+            output.textContent += `  • 文本/图像搜索\n`;
+            output.textContent += `  • 数据库管理\n`;
+            output.textContent += `${'─'.repeat(50)}\n`;
+            output.textContent += `请选择上方功能开始使用...\n`;
+        });
+    </script>
+</body>
+</html>
